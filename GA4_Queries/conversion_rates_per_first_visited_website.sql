@@ -1,7 +1,28 @@
+DECLARE yesterday_suffix STRING;
+SET yesterday_suffix = FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY));
+
+INSERT INTO ofr-dlm-datalake-media-prd.analyse_parcours_clients.analyse_date (
+    entry_page,
+    event_date,
+    univers_affichage,
+    sous_univers,
+    id_tracking,
+    total_sessions,
+    LOGGED_SESSIONS,
+    CONVERTED_SESSIONS,
+    LOGGED_CONVERTED_SESSIONS,
+    average_pages_per_session,
+    min_pages_to_conversion,
+    max_pages_to_conversion,
+    avg_pages_to_conversion,
+    conversion_rate
+)
+
 WITH hits_to_session AS (
     SELECT
         CONCAT(user_pseudo_id, '-', (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id')) as session_user,
         event_timestamp,
+        event_date,
         event_name,
         (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'page_location')  AS page_location,
         (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'type_page') AS type_page,
@@ -13,8 +34,9 @@ WITH hits_to_session AS (
         (SELECT value.string_value FROM UNNEST(user_properties) WHERE key = "user_logged") AS user_logged,
         ecommerce.transaction_id AS transaction_id
     FROM
-        `nom_de_la_table_ga4`
+        `ofr-dlm-datalake-media-prd.analytics_251394312.events_*`
     WHERE user_pseudo_id NOT LIKE "00000%"
+        AND _TABLE_SUFFIX = yesterday_suffix
 ),
   
 -- Extraire les id_tracking dans les évènements "debug"
@@ -43,11 +65,13 @@ entry_pages AS (
     SELECT
       session_user,
       event_timestamp AS entry_time,
+      PARSE_DATE('%Y%m%d', event_date) AS event_date,
       REGEXP_EXTRACT(page_location, r'([^?]*)') AS entry_page
     FROM (
         SELECT
             session_user,
             event_timestamp,
+            event_date,
             page_location,
             ROW_NUMBER() OVER (PARTITION BY session_user ORDER BY event_timestamp ASC) as row_number
         FROM
@@ -62,6 +86,7 @@ entry_tracking_user_logged AS (
     SELECT
       ep.session_user,
       ep.entry_time,
+      ep.event_date,
       ep.entry_page,
       IF(LOGICAL_OR(hits_to_session.user_logged = 'oui'), TRUE, FALSE) AS is_user_logged,
       idt.is_id_tracking,
@@ -73,7 +98,7 @@ entry_tracking_user_logged AS (
     INNER JOIN
       id_tracking AS idt ON ep.session_user = idt.session_user
     GROUP BY
-      ep.session_user, ep.entry_time, ep.entry_page, idt.is_id_tracking, idt.id_tracking
+      ep.session_user, ep.entry_time, ep.event_date, ep.entry_page, idt.is_id_tracking, idt.id_tracking
 ),
   
 -- Extraire les données des évènements "purchase"
@@ -131,6 +156,7 @@ sessions_info AS (
     SELECT
         e.session_user,
         e.entry_time,
+        e.event_date,
         e.entry_page,
         e.is_id_tracking,
         e.id_tracking,
@@ -176,6 +202,7 @@ converted_sessions_info AS (
 total_sessions AS (
     SELECT
         entry_page,
+        event_date,
         univers_affichage,
         sous_univers,
         id_tracking,
@@ -186,7 +213,7 @@ total_sessions AS (
     FROM
         sessions_info
     GROUP BY
-        entry_page, univers_affichage, sous_univers, id_tracking
+        entry_page, event_date, univers_affichage, sous_univers, id_tracking
 ),
   
 sessions_with_conversion AS (
@@ -211,6 +238,7 @@ sessions_with_conversion AS (
 final_table AS (
     SELECT
         ts.entry_page,
+        ts.event_date,
         ts.univers_affichage,
         ts.sous_univers,
         ts.id_tracking,
@@ -229,4 +257,4 @@ final_table AS (
         sessions_with_conversion swc ON ts.entry_page = swc.entry_page AND ts.id_tracking = swc.id_tracking AND ts.univers_affichage = swc.univers_affichage AND ts.sous_univers = swc.sous_univers
 )
  
-SELECT * FROM final_table ORDER BY total_sessions DESC
+SELECT * FROM final_table WHERE total_sessions > 1
