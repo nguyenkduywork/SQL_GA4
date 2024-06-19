@@ -34,7 +34,7 @@ WITH hits_to_session AS (
         (SELECT value.string_value FROM UNNEST(user_properties) WHERE key = "user_logged") AS user_logged,
         ecommerce.transaction_id AS transaction_id
     FROM
-        `ofr-dlm-datalake-media-prd.analytics_251394312.events_*`
+        `table_name`
     WHERE user_pseudo_id NOT LIKE "00000%"
         AND _TABLE_SUFFIX = yesterday_suffix
 ),
