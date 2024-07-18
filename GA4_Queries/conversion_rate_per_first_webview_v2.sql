@@ -1,4 +1,3 @@
--- Optimize the hits_to_session CTE
 WITH hits_to_session AS (
     SELECT
         CONCAT(user_pseudo_id, '-', 
@@ -25,7 +24,6 @@ WITH hits_to_session AS (
         AND (SELECT value.string_value FROM UNNEST(user_properties) WHERE key = "user_logged") IS NOT NULL
 ),
 
--- Optimize the id_tracking CTE
 id_tracking AS (
     SELECT
         session_user,
@@ -36,7 +34,6 @@ id_tracking AS (
     GROUP BY session_user
 ),
 
--- New CTE for demande_intention
 demande_intention_data AS (
     SELECT
         session_user,
@@ -46,7 +43,6 @@ demande_intention_data AS (
     GROUP BY session_user
 ),
 
--- Optimize the session_data CTE
 session_data AS (
     SELECT
         hts.session_user,
@@ -86,7 +82,7 @@ session_data AS (
         hts.session_user, did.demande_intention
 ),
 
--- FINAL_TABLE CTE remains the same
+
 FINAL_TABLE AS (
     SELECT
         first_page_data.page_location AS entry_page,
